@@ -1,0 +1,7 @@
+mcs.metadata:
+  componentName: https://connect.hyland.com/t5/
+  description: This knowledge source searches information on the web found in https://connect.hyland.com/t5/ website
+kind: KnowledgeSourceConfiguration
+source:
+  kind: PublicSiteSearchSource
+  site: https://connect.hyland.com/t5/

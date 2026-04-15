@@ -1,0 +1,8 @@
+{
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportUndefinedVariable": "none"
+    },
+    "python.analysis.ignore": [
+        "${env:LOCALAPPDATA}/Programs/Python/**"
+    ]
+}

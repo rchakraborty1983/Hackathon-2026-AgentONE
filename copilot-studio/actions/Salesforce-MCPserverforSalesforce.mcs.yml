@@ -1,0 +1,14 @@
+mcs.metadata:
+  componentName: Salesforce - MCP server for Salesforce
+kind: TaskDialog
+modelDisplayName: MCP server for Salesforce
+modelDescription: MCP server for Salesforce
+action:
+  kind: InvokeExternalAgentTaskAction
+  connectionReference: crcd5_knowledgeOptionGuide.shared_salesforce.14721c4047c94a1c8bc8e5dc6d0d8e24
+  connectionProperties:
+    mode: Maker
+
+  operationDetails:
+    kind: ModelContextProtocolMetadata
+    operationId: mcp_SalesforceManagement

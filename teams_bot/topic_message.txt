@@ -1,0 +1,30 @@
+Agent ONE reporting. Everything you need. One place. One agent. You say it — I'll do it.
+
+
+⚡ **Quick Actions** — Type any of these to get started:
+
+📚 Product Guidance — "How do I create a unity form from Workview?"
+
+📖 Confluence Assistant — "get the confluence page for Hyland IDP Setup process with OnBase DB and API Server"
+
+🔍 Jira Assistant — "Read SBPWC-12657"
+
+📝 Code Review — "Code review for SBPWC-12657"
+
+🏗️ Build Questions — "Latest build for 26.1"
+
+📅 BOTW Schedule — "Show BOTW schedule for 25.1"
+
+🔀 Branch Compare — "Compare DEV and 25.1 for DynamicQueryUtility.cs"
+
+⚠️ **Build Failure** — "Analyze build failure for 26.1.0.441"
+
+📦 Package Check — "Check latest axios npm package in ProGet"
+
+🐙 GitHub PR — "Create a PR in GHAS-POC-AngularClient repo in HylandFoundation org for solving code-scanning/747 alert"
+
+🛡️ GHAS Alerts — "List top 5 code scanning alerts with "Critical" or "High" severity for GHAS-POC-AngularClient repo in HylandFoundation org"
+
+🎫 Salesforce Cases — "Get me top 5 most critical customer issue trends for OnBase from Salesforce cases"
+
+Or just ask any question — I'll figure out the rest!

@@ -1,0 +1,27 @@
+mcs.metadata:
+  componentName: AgentONE - AgentONE
+kind: TaskDialog
+response:
+  activity:
+  mode: Generated
+
+modelDescription: "IMPORTANT: This tool returns the COMPLETE and FINAL answer. When you call this tool, its response IS your entire reply to the user. Do NOT generate your own answer before, after, or alongside the tool response. Do NOT use Knowledge Sources for the same query. Send a natural language message to analyze Jira cards, TFS changesets, builds, GitHub PRs, code diffs, OnBase documentation, or query BuildDirector. Supports follow-up questions."
+outputs:
+  - propertyName: agent_used
+
+  - propertyName: conversation_id
+
+  - propertyName: response
+
+  - propertyName: tool_calls_made
+
+action:
+  kind: InvokeConnectorTaskAction
+  connectionReference: crcd5_knowledgeOptionGuide.shared_crcd5-5fagentone-5f1b9a243b75a05d37.45e58181e942449fabe92c9171c28395
+  connectionProperties:
+    mode: Maker
+
+  operationId: chatWithAgent
+  aIPluginOperationExportKey: aiplugin.name=msdynaip_77bfac5e-b2a5-44e7-9d40-d61163e6a9b6,operationid=msdynaip_chatWithAgent
+
+outputMode: All

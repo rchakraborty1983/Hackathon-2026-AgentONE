@@ -1,0 +1,13 @@
+﻿connectionReferences:
+  - connectionReferenceLogicalName: crcd5_knowledgeOptionGuide.shared_crcd5-5fagentone-5f1b9a243b75a05d37.45e58181e942449fabe92c9171c28395
+    connectorId: /providers/Microsoft.PowerApps/apis/shared_crcd5-5fagentone-5f1b9a243b75a05d37
+  - connectionReferenceLogicalName: crcd5_knowledgeOptionGuide.shared_crcd5-5fagentone-5f1b9a243b75a05d37.45e58181e942449fabe92c9171c28395
+    connectorId: /providers/Microsoft.PowerApps/apis/shared_crcd5-5fagentone-5f1b9a243b75a05d37
+  - connectionReferenceLogicalName: crcd5_knowledgeOptionGuide.shared_crcd5-5fatlassian-20rovo-20mcp-20server-5f1b9a243b75a05d37.ccc359b74f544cc394c16d90bccaae6e
+    connectorId: /providers/Microsoft.PowerApps/apis/shared_crcd5-5fatlassian-20rovo-20mcp-20server-5f1b9a243b75a05d37
+  - connectionReferenceLogicalName: crcd5_knowledgeOptionGuide.shared_crcd5-5fatlassian-20rovo-20mcp-20server-5f1b9a243b75a05d37.ccc359b74f544cc394c16d90bccaae6e
+    connectorId: /providers/Microsoft.PowerApps/apis/shared_crcd5-5fatlassian-20rovo-20mcp-20server-5f1b9a243b75a05d37
+  - connectionReferenceLogicalName: crcd5_knowledgeOptionGuide.shared_salesforce.14721c4047c94a1c8bc8e5dc6d0d8e24
+    connectorId: /providers/Microsoft.PowerApps/apis/shared_salesforce
+  - connectionReferenceLogicalName: crcd5_knowledgeOptionGuide.shared_salesforce.14721c4047c94a1c8bc8e5dc6d0d8e24
+    connectorId: /providers/Microsoft.PowerApps/apis/shared_salesforce

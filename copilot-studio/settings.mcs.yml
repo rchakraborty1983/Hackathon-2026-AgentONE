@@ -1,0 +1,39 @@
+﻿displayName: Agent ONE
+schemaName: crcd5_knowledgeOptionGuide
+accessControlPolicy: Any
+authenticationMode: None
+authenticationTrigger: AsNeeded
+configuration:
+  channels:
+    - channelId: MsTeams
+
+  settings:
+    GenerativeActionsEnabled: true
+
+  isAgentConnectable: false
+  publishOnImport: true
+  gPTSettings:
+    defaultSchemaName: crcd5_knowledgeOptionGuide.gpt.default
+
+  isLightweightBot: false
+  aISettings:
+    useModelKnowledge: false
+    isFileAnalysisEnabled: true
+    isSemanticSearchEnabled: true
+    contentModeration: High
+    optInUseLatestModels: true
+
+  recognizer:
+    kind: GenerativeAIRecognizer
+
+  analyticsSettings:
+    roiCalculation:
+      kind: SessionBasedRoiCalculationSettings
+      currencyCode: USD
+      savedCost: 10
+      savedTimeInSeconds: 600
+
+authenticationConfiguration: {}
+publishedOn: 2026-04-15T21:22:39.0000000Z
+template: default-2.1.0
+language: 1033

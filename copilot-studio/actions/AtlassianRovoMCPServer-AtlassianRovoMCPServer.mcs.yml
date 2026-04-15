@@ -1,0 +1,14 @@
+mcs.metadata:
+  componentName: Atlassian Rovo MCP Server - Atlassian Rovo MCP Server
+kind: TaskDialog
+modelDisplayName: Atlassian Rovo MCP Server
+modelDescription: The Atlassian Rovo MCP Server is a cloud-based bridge between your Atlassian Cloud site and compatible external tools. Once configured, it enables those tools to interact with Jira, Compass, and Confluence data in real-time.
+action:
+  kind: InvokeExternalAgentTaskAction
+  connectionReference: crcd5_knowledgeOptionGuide.shared_crcd5-5fatlassian-20rovo-20mcp-20server-5f1b9a243b75a05d37.ccc359b74f544cc394c16d90bccaae6e
+  connectionProperties:
+    mode: Maker
+
+  operationDetails:
+    kind: ModelContextProtocolMetadata
+    operationId: InvokeServer

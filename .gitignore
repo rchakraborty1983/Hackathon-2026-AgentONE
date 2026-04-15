@@ -1,0 +1,47 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+*.env.local
+
+# Logs
+logs/
+*.log
+
+# Runtime artifacts (generated during analysis sessions)
+/diffs/
+/builds/
+/changesets/
+/scripts/
+/Docs/
+/25.1_files/
+/tmp/
+
+# Generated analysis files
+*.diff
+*_diffs.json
+*_history.json
+*_full.json
+*_branch_diff.json
+*_Comparison.md
+*_Branch_Comparison.html
+dumpCache_*
+api_endpoints.txt
+api_health.txt
+api_spec.json
+api_test.log
+openapi_full.json
+
+# Copilot Studio internal
+copilot-studio/.mcs/changetoken.txt
+
+# OS
+Thumbs.db
+.DS_Store

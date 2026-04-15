@@ -1,0 +1,7 @@
+mcs.metadata:
+  componentName: WCAG guidelines
+  description: This knowledge source searches information on the web found in https://www.w3.org/WAI website
+kind: KnowledgeSourceConfiguration
+source:
+  kind: PublicSiteSearchSource
+  site: https://www.w3.org/WAI

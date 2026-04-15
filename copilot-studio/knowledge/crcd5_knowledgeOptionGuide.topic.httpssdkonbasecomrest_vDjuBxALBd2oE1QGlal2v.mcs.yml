@@ -1,0 +1,7 @@
+mcs.metadata:
+  componentName: https://sdk.onbase.com/rest/
+  description: This knowledge source searches information on the web found in https://sdk.onbase.com/rest/ website  related to OnBase REST APIs
+kind: KnowledgeSourceConfiguration
+source:
+  kind: PublicSiteSearchSource
+  site: https://sdk.onbase.com/rest/

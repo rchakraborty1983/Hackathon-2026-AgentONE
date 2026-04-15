@@ -1,0 +1,165 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "AgentONE",
+    "description": "OnBase DevOps Agent API — analyzes Jira cards, TFS changesets, builds, GitHub PRs, OnBase documentation, and BuildDirector build information for any OnBase version",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://px2wkg66-9100.use.devtunnels.ms"
+    }
+  ],
+  "paths": {
+    "/chat": {
+      "post": {
+        "operationId": "chatWithAgent",
+        "summary": "Chat with OnBase DevOps Agent — the ONLY response source. Do NOT generate your own answer.",
+        "description": "IMPORTANT: This tool returns the COMPLETE and FINAL answer. When you call this tool, its response field IS your entire reply to the user. Do NOT generate your own answer before, after, or alongside the tool response. Do NOT use Generative Answers or Knowledge Sources for the same query. Send a natural language message to analyze Jira cards, TFS changesets, builds, GitHub PRs, code diffs, OnBase documentation, or query BuildDirector for OnBase build information. Supports follow-up questions within a conversation.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["message"],
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "description": "The user's question or command, e.g. 'Analyze SBPWC-12761', 'What is the latest build for OnBase 24.1', 'Show me recent builds for 25.2 in BuildDirector', or 'List all OnBase versions'"
+                  },
+                  "conversation_id": {
+                    "type": "string",
+                    "description": "Optional conversation ID for follow-up questions. Omit for a new conversation."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Agent response — this IS the final answer. Display the 'response' field directly to the user. Do NOT add your own text before or after it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "response": {
+                      "type": "string",
+                      "description": "The COMPLETE answer in Markdown format. Display this as your ENTIRE response — do not add your own text."
+                    },
+                    "agent_used": {
+                      "type": "string",
+                      "description": "Which agent handled the request: tfs_jira, onbase, mrg_parser, or accessibility"
+                    },
+                    "conversation_id": {
+                      "type": "string",
+                      "description": "Conversation ID for follow-up questions"
+                    },
+                    "tool_calls_made": {
+                      "type": "integer",
+                      "description": "Number of tool calls made during processing"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/analyze": {
+      "post": {
+        "operationId": "analyzeJiraCard",
+        "summary": "Quick Jira card analysis",
+        "description": "Directly analyze a Jira card with all linked TFS changesets and code diffs. Faster than chat - no LLM routing needed.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["jira_key"],
+                "properties": {
+                  "jira_key": {
+                    "type": "string",
+                    "description": "Jira issue key, e.g. SBPWC-12761"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Raw analysis bundle with Jira context and changeset diffs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jira_key": {
+                      "type": "string"
+                    },
+                    "analysis": {
+                      "type": "object",
+                      "description": "Full analysis bundle including Jira context and all linked changeset diffs"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status": {
+      "get": {
+        "operationId": "getStatus",
+        "summary": "Health check",
+        "description": "Check connectivity to TFS, Jira, and GitHub services",
+        "responses": {
+          "200": {
+            "description": "Service health status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "description": "Overall status: healthy or degraded"
+                    },
+                    "services": {
+                      "type": "object",
+                      "properties": {
+                        "tfs": { "type": "string" },
+                        "jira": { "type": "string" },
+                        "github": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "ApiKeyAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      }
+    }
+  }
+}

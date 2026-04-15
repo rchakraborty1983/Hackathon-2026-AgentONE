@@ -1,0 +1,7 @@
+mcs.metadata:
+  componentName: https://support.hyland.com/r/OnBase
+  description: This knowledge source searches information on the web found in https://support.hyland.com/r/OnBase website
+kind: KnowledgeSourceConfiguration
+source:
+  kind: PublicSiteSearchSource
+  site: https://support.hyland.com/r/OnBase

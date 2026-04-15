@@ -1,0 +1,55 @@
+mcs.metadata:
+  componentName: Greeting
+  description: This topic is triggered when the user greets the agent.
+kind: AdaptiveDialog
+modelDescription: "Only use this topic for greetings like Hello, Hi, Hey, Good morning. Do NOT use this topic for: Product guidance, Confluence assistant, Jira assistant, Code review, Build query, BOTW schedule, Branch compare, Build failure, Package check, GitHub PR, GHAS alerts, Salesforce cases. Those must go to the Chat with OnBase DevOps Agent tool."
+beginDialog:
+  kind: OnRecognizedIntent
+  id: main
+  intent:
+    displayName: Greeting
+    includeInOnSelectIntent: false
+    triggerQueries:
+      - Good afternoon
+      - Good morning
+      - Hello
+      - Hey
+      - Hi
+
+  actions:
+    - kind: SendActivity
+      id: sendActivity_w6aHx2
+      activity: |-
+        **Agent ONE reporting. Everything you need. One place. One agent. You say it — I'll do it.**
+
+
+        **⚡ \*\*Quick Actions\*\* — Type any of these to get started:**
+
+        **📚 Product Guidance — "_How do I create a unity form from Workview?_"**
+
+        **📖 Confluence Assistant — "_get the confluence page for Hyland IDP Setup process with OnBase DB and API Server_"**
+
+        **🔍 Jira Assistant — "_Read SBPWC-12657_"**
+
+        **📝 Code Review — "_Code review for SBPWC-12657_"**
+
+        **🏗️ Build Questions — "_Latest build for 26.1_"**
+
+        **📅 BOTW Schedule — "_Show BOTW schedule for 25.1_"**
+
+        **🔀 Branch Compare — "_Compare DEV and 25.1 for DynamicQueryUtility.cs_"**
+
+        **⚠️ \*\*Build Failure\*\* — "_Analyze build failure for 26.1.0.441_"**
+
+        **📦 Package Check — "_Check latest axios npm package in ProGet_"**
+
+        **🐙 GitHub PR — "_Create a PR in GHAS-POC-AngularClient repo in HylandFoundation org for solving code-scanning/747 alert_"**
+
+        **🛡️ GHAS Alerts — "_List top 5 code scanning alerts with "Critical" or "High" severity for GHAS-POC-AngularClient repo in HylandFoundation org_"**
+
+        **🎫 Salesforce Cases — "_Get me top 5 most critical customer issue trends for OnBase from Salesforce cases_"**
+
+        **Or just ask any question — I'll figure out the rest!**
+
+    - kind: CancelAllDialogs
+      id: cancelAllDialogs_01At22
