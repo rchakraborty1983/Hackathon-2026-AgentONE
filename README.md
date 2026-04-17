@@ -71,40 +71,51 @@ GitHub Copilot custom agent instructions used in VS Code for OnBase development:
 
 ## Setup
 
-### Prerequisites
-- Python 3.13+
-- TFS REST API access (on-prem TFS server)
-- Azure OpenAI or OpenAI API key (GPT-5)
-- Copilot Studio license (for Teams bot)
-- Dev tunnel or public HTTPS endpoint
+### Option A: VS Code Only (Recommended for developers)
 
-### Quick Start
+Use Agent ONE directly in VS Code via GitHub Copilot agents and MCP tools — no Teams bot needed.
 
+**See [SETUP.md](SETUP.md) for the full step-by-step guide.**
+
+Quick summary:
 ```powershell
-# 1. Clone and setup
+git clone https://github.com/rchakraborty1983/Hackathon-2026-AgentONE.git C:\TFS_MCP
 cd C:\TFS_MCP
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r teams_bot/requirements.txt
+pip install -r requirements.txt
+# Set env vars: TFS_PAT, JIRA_EMAIL, JIRA_API_TOKEN, GITHUB_TOKEN
+# Copy mcp.json.template → %APPDATA%\Code\User\mcp.json (update paths)
+# Copy agent-prompts/*.agent.md → %APPDATA%\Code\User\prompts\
+# Restart VS Code → use @OnBase or @TFS_Jira_Analyzer in Copilot Chat
+```
 
-# 2. Configure environment
-# Set environment variables: OPENAI_API_KEY, TFS_PAT, JIRA_TOKEN, etc.
+### Option B: Teams Bot (Full deployment with Copilot Studio)
 
-# 3. Start TFS MCP Server (port 9000)
-python TFS_MCP_Server.py
+For the Teams conversational interface, additional setup is required:
 
-# 4. Start Agent ONE FastAPI server (port 9100)
+**Prerequisites:**
+- Everything from Option A
+- Azure OpenAI or OpenAI API key (GPT-5)
+- Copilot Studio license
+- Dev tunnel or public HTTPS endpoint
+
+```powershell
+# 1. Start TFS MCP Server (port 9000)
+python TFSMCP.py
+
+# 2. Start Agent ONE FastAPI server (port 9100)
 cd teams_bot
 python app.py
 
-# 5. Start dev tunnel (for Copilot Studio → local server)
+# 3. Start dev tunnel (for Copilot Studio → local server)
 devtunnel host --port 9100
 
-# 6. Or use watchdog to manage all services
+# 4. Or use watchdog to manage all services
 powershell -File watchdog.ps1
 ```
 
-### Copilot Studio Setup
+**Copilot Studio Setup:**
 1. Import `copilot-studio/` into Copilot Studio
 2. Configure the HTTP action with your dev tunnel URL
 3. Paste `teams_bot/copilot_studio_instructions.txt` into the Instructions field
