@@ -6233,6 +6233,412 @@ def proget_search_packages(
 
 
 # ------------------------------------------------
+# JENKINS PIPELINE ANALYSIS
+# ------------------------------------------------
+
+JENKINS_BASE_URL = os.getenv("JENKINS_BASE_URL", "https://csp.jenkins.hylandqa.net")
+_JENKINS_VERIFY_SSL = False  # Internal QA server — self-signed cert
+
+
+def _jenkins_get(url: str, *, accept: str = "application/json", timeout: int = 20):
+    """GET request against a Jenkins URL.  Returns parsed JSON or raw text."""
+    headers = {"Accept": accept}
+    r = requests.get(url, headers=headers, timeout=timeout, verify=_JENKINS_VERIFY_SSL)
+    r.raise_for_status()
+    if "json" in accept:
+        return r.json()
+    return r.text
+
+
+def _parse_jenkins_url(url: str) -> dict | None:
+    """Parse a Jenkins Blue Ocean URL into pipeline, branch, run, and node.
+
+    Handles URLs like:
+      .../blue/organizations/jenkins/Bacon%2FApiServer%2FGitApiServer/detail/PR-914/1/pipeline/481
+      .../blue/organizations/jenkins/Bacon%2FApiServer%2FGitApiServer/detail/PR-914/1/pipeline
+      .../job/Bacon/job/ApiServer/job/GitApiServer/job/PR-914/1/  (classic)
+    """
+    from urllib.parse import unquote
+
+    url = unquote(url).strip().rstrip("/")
+
+    # Blue Ocean URL
+    m = re.search(
+        r"/blue/organizations/jenkins/(.+?)/detail/([^/]+)/(\d+)(?:/pipeline(?:/(\d+))?)?",
+        url,
+    )
+    if m:
+        pipeline_path = m.group(1)   # "Bacon/ApiServer/GitApiServer"
+        branch = m.group(2)          # "PR-914"
+        run_number = m.group(3)      # "1"
+        node_id = m.group(4)         # "481" or None
+        return {
+            "pipeline": pipeline_path,
+            "branch": branch,
+            "run": run_number,
+            "node_id": node_id,
+            "base_url": JENKINS_BASE_URL,
+        }
+
+    # Classic URL:  /job/Bacon/job/ApiServer/job/GitApiServer/job/PR-914/1/
+    m2 = re.search(r"(/job/[^?]+?)(?:\?|$)", url)
+    if m2:
+        raw_path = m2.group(1)
+        parts = [p for p in raw_path.split("/") if p and p != "job"]
+        if len(parts) >= 2:
+            run_number = parts[-1] if parts[-1].isdigit() else None
+            if run_number:
+                branch = parts[-2]
+                pipeline_path = "/".join(parts[:-2])
+            else:
+                branch = parts[-1]
+                pipeline_path = "/".join(parts[:-1])
+                run_number = None
+            return {
+                "pipeline": pipeline_path,
+                "branch": branch,
+                "run": run_number,
+                "node_id": None,
+                "base_url": JENKINS_BASE_URL,
+            }
+
+    return None
+
+
+def _jenkins_bo_run_url(parsed: dict) -> str:
+    """Build the Blue Ocean REST API base URL for a run.
+    
+    Multi-folder pipelines (e.g. Bacon/ApiServer/GitApiServer) need nested
+    /pipelines/ segments: /pipelines/Bacon/pipelines/ApiServer/pipelines/GitApiServer
+    """
+    parts = parsed["pipeline"].split("/")
+    pipeline_path = "/pipelines/".join(parts)
+    branch = parsed["branch"]
+    run = parsed["run"]
+    return (
+        f"{parsed['base_url']}/blue/rest/organizations/jenkins"
+        f"/pipelines/{pipeline_path}/branches/{branch}/runs/{run}"
+    )
+
+
+def _jenkins_blue_ocean_url(parsed: dict) -> str:
+    """Build the Blue Ocean UI URL for a run."""
+    from urllib.parse import quote
+    pipeline = quote(parsed["pipeline"], safe="")
+    branch = parsed["branch"]
+    run = parsed["run"]
+    url = f"{parsed['base_url']}/blue/organizations/jenkins/{pipeline}/detail/{branch}/{run}/pipeline"
+    if parsed.get("node_id"):
+        url += f"/{parsed['node_id']}"
+    return url
+
+
+def jenkins_get_run(url: str) -> dict:
+    """Get Jenkins pipeline run details from a Blue Ocean or classic URL.
+
+    Parses the Jenkins URL and returns: run metadata, all stage results,
+    and identifies failed stages.
+
+    Args:
+        url: Jenkins Blue Ocean or classic URL for a pipeline run
+    Returns:
+        dict with run info, stages, and failure summary.
+    """
+    parsed = _parse_jenkins_url(url)
+    if not parsed:
+        return {"error": f"Could not parse Jenkins URL: {url}"}
+
+    bo_url = _jenkins_bo_run_url(parsed)
+    _logger.info(f"Jenkins: fetching run from {bo_url}")
+
+    try:
+        run_data = _jenkins_get(f"{bo_url}/")
+    except requests.HTTPError as e:
+        return {"error": f"Jenkins API error: {e.response.status_code} {e.response.reason}"}
+
+    result = {
+        "pipeline": parsed["pipeline"],
+        "branch": parsed["branch"],
+        "run_number": parsed["run"],
+        "name": run_data.get("name", ""),
+        "result": run_data.get("result", "UNKNOWN"),
+        "state": run_data.get("state", "UNKNOWN"),
+        "start_time": run_data.get("startTime", ""),
+        "end_time": run_data.get("endTime", ""),
+        "duration_seconds": (run_data.get("durationInMillis") or 0) // 1000,
+        "commit_id": run_data.get("commitId", ""),
+        "causes": [c.get("shortDescription", "") for c in run_data.get("causes", [])],
+        "blue_ocean_url": _jenkins_blue_ocean_url(parsed),
+    }
+
+    # Fetch pipeline stages (nodes)
+    try:
+        nodes = _jenkins_get(f"{bo_url}/nodes/")
+    except Exception:
+        nodes = []
+
+    stages = []
+    failed_stages = []
+    for node in nodes:
+        stage = {
+            "id": node.get("id"),
+            "name": node.get("displayName", ""),
+            "result": node.get("result", "UNKNOWN"),
+            "state": node.get("state", "UNKNOWN"),
+            "duration_seconds": (node.get("durationInMillis") or 0) // 1000,
+        }
+        stages.append(stage)
+        # Detect failures and unstable (FINISHED state with non-SUCCESS result)
+        if node.get("result") in ("FAILURE", "UNSTABLE") or (
+            node.get("state") == "FINISHED" and node.get("result") != "SUCCESS"
+        ):
+            failed_stages.append(stage)
+
+    result["stages"] = stages
+    result["failed_stages"] = failed_stages
+    result["total_stages"] = len(stages)
+    return result
+
+
+def jenkins_get_failure_log(url: str, node_id: str = "") -> dict:
+    """Get failure logs for a Jenkins pipeline run.
+
+    Fetches logs for a specific stage node, or auto-detects failed stages
+    and fetches their logs.
+
+    Args:
+        url: Jenkins Blue Ocean or classic URL for a pipeline run
+        node_id: Optional specific node ID. If empty, auto-detects failed stages.
+    Returns:
+        dict with failure logs, failed steps, and error messages.
+    """
+    parsed = _parse_jenkins_url(url)
+    if not parsed:
+        return {"error": f"Could not parse Jenkins URL: {url}"}
+
+    # Use node_id from param, or from URL, or auto-detect
+    target_node = node_id or parsed.get("node_id")
+    bo_url = _jenkins_bo_run_url(parsed)
+    _logger.info(f"Jenkins: fetching failure log, node={target_node or 'auto-detect'}")
+
+    failure_logs = []
+
+    if target_node:
+        target_nodes = [target_node]
+    else:
+        # Auto-detect failed nodes
+        try:
+            nodes = _jenkins_get(f"{bo_url}/nodes/")
+            target_nodes = []
+            for node in nodes:
+                if node.get("result") in ("FAILURE", "UNSTABLE") or (
+                    node.get("state") == "FINISHED" and node.get("result") != "SUCCESS"
+                ):
+                    target_nodes.append(str(node.get("id")))
+            if not target_nodes:
+                return {"message": "No failed stages detected.", "logs": []}
+        except Exception as e:
+            return {"error": f"Could not fetch pipeline nodes: {e}"}
+
+    for nid in target_nodes[:5]:  # Cap at 5 failed stages
+        log_entry = {"node_id": nid, "node_name": "", "log": "", "failed_steps": []}
+
+        # Get the node log
+        try:
+            log_text = _jenkins_get(f"{bo_url}/nodes/{nid}/log/", accept="text/plain")
+            log_entry["log"] = log_text[-4000:] if len(log_text) > 4000 else log_text  # tail
+        except Exception:
+            log_entry["log"] = "(could not retrieve node log)"
+
+        # Get steps in this node to find specific failure points
+        try:
+            steps = _jenkins_get(f"{bo_url}/nodes/{nid}/steps/")
+            for step in steps:
+                step_info = {
+                    "id": step.get("id"),
+                    "name": step.get("displayName", ""),
+                    "description": step.get("displayDescription") or "",
+                    "result": step.get("result", ""),
+                    "state": step.get("state", ""),
+                }
+                # Get the node name from steps metadata
+                if not log_entry["node_name"] and steps:
+                    log_entry["node_name"] = nid  # fallback
+
+                if step.get("result") in ("FAILURE", "UNSTABLE"):
+                    # Fetch individual step log
+                    try:
+                        step_log = _jenkins_get(
+                            f"{bo_url}/steps/{step['id']}/log/",
+                            accept="text/plain",
+                        )
+                        step_info["log"] = step_log[-2000:] if len(step_log) > 2000 else step_log
+                    except Exception:
+                        step_info["log"] = ""
+                    log_entry["failed_steps"].append(step_info)
+        except Exception:
+            pass
+
+        failure_logs.append(log_entry)
+
+    # Also try to find node names from the run stages
+    try:
+        nodes_data = _jenkins_get(f"{bo_url}/nodes/")
+        node_names = {str(n["id"]): n.get("displayName", "") for n in nodes_data}
+        for entry in failure_logs:
+            entry["node_name"] = node_names.get(entry["node_id"], entry["node_id"])
+    except Exception:
+        pass
+
+    return {
+        "pipeline": parsed["pipeline"],
+        "branch": parsed["branch"],
+        "run_number": parsed["run"],
+        "blue_ocean_url": _jenkins_blue_ocean_url(parsed),
+        "failure_logs": failure_logs,
+        "total_failed_nodes": len(failure_logs),
+    }
+
+
+def jenkins_analyze_failure(url: str) -> dict:
+    """Comprehensive Jenkins pipeline failure analysis.
+
+    Combines run metadata, stage results, and failure logs into a
+    complete analysis report.
+
+    Args:
+        url: Jenkins Blue Ocean or classic URL for a pipeline run
+    Returns:
+        dict with full analysis: run info, all stages, failures, logs, and summary.
+    """
+    parsed = _parse_jenkins_url(url)
+    if not parsed:
+        return {"error": f"Could not parse Jenkins URL: {url}"}
+
+    bo_url = _jenkins_bo_run_url(parsed)
+    _logger.info(f"Jenkins: full failure analysis for {parsed['pipeline']}/{parsed['branch']}#{parsed['run']}")
+
+    # Step 1: Get run metadata
+    try:
+        run_data = _jenkins_get(f"{bo_url}/")
+    except requests.HTTPError as e:
+        return {"error": f"Jenkins API error: {e.response.status_code} {e.response.reason}"}
+
+    # Step 2: Get all stages
+    try:
+        nodes = _jenkins_get(f"{bo_url}/nodes/")
+    except Exception:
+        nodes = []
+
+    stages = []
+    failed_stage_ids = []
+    for node in nodes:
+        stage = {
+            "id": str(node.get("id")),
+            "name": node.get("displayName", ""),
+            "result": node.get("result", "UNKNOWN"),
+            "state": node.get("state", "UNKNOWN"),
+            "duration_seconds": (node.get("durationInMillis") or 0) // 1000,
+        }
+        stages.append(stage)
+        if node.get("result") in ("FAILURE", "UNSTABLE") or (
+            node.get("state") == "FINISHED" and node.get("result") != "SUCCESS"
+        ):
+            failed_stage_ids.append(str(node.get("id")))
+
+    # Step 3: Get failure logs for each failed stage
+    failure_details = []
+    for nid in failed_stage_ids[:5]:
+        detail = {
+            "node_id": nid,
+            "node_name": next((s["name"] for s in stages if s["id"] == nid), nid),
+            "log_tail": "",
+            "failed_steps": [],
+            "tfs_build_id": None,
+            "tfs_build_link": None,
+            "error_summary": "",
+        }
+
+        # Get node log
+        try:
+            log_text = _jenkins_get(f"{bo_url}/nodes/{nid}/log/", accept="text/plain")
+            detail["log_tail"] = log_text[-4000:] if len(log_text) > 4000 else log_text
+
+            # Extract TFS build reference if present
+            tfs_id_match = re.search(r"Build ID:\s*(\d+)", log_text)
+            if tfs_id_match:
+                detail["tfs_build_id"] = tfs_id_match.group(1)
+            tfs_link_match = re.search(r"Build Link:\s*(http\S+)", log_text)
+            if tfs_link_match:
+                detail["tfs_build_link"] = tfs_link_match.group(1)
+
+            # Extract error lines
+            error_lines = []
+            for line in log_text.split("\n"):
+                line_text = re.sub(r"^\[[\d\-T:.Z]+\]\s*", "", line).strip()
+                if any(kw in line_text.lower() for kw in [
+                    "error", "fail", "exception", "throw", "broken", "fatal",
+                ]) and line_text and len(line_text) > 10:
+                    error_lines.append(line_text)
+            detail["error_summary"] = "\n".join(error_lines[-10:])
+        except Exception as e:
+            detail["log_tail"] = f"(could not retrieve log: {e})"
+
+        # Get failed steps
+        try:
+            steps = _jenkins_get(f"{bo_url}/nodes/{nid}/steps/")
+            for step in steps:
+                if step.get("result") in ("FAILURE", "UNSTABLE"):
+                    step_info = {
+                        "id": step.get("id"),
+                        "name": step.get("displayName", ""),
+                        "description": step.get("displayDescription") or "",
+                        "result": step.get("result", ""),
+                    }
+                    try:
+                        slog = _jenkins_get(
+                            f"{bo_url}/steps/{step['id']}/log/", accept="text/plain",
+                        )
+                        step_info["log"] = slog[-2000:] if len(slog) > 2000 else slog
+                    except Exception:
+                        step_info["log"] = ""
+                    detail["failed_steps"].append(step_info)
+        except Exception:
+            pass
+
+        failure_details.append(detail)
+
+    # Build summary
+    total_duration = (run_data.get("durationInMillis") or 0) // 1000
+    succeeded = sum(1 for s in stages if s["result"] == "SUCCESS")
+    failed = len(failed_stage_ids)
+    skipped = sum(1 for s in stages if s["result"] == "NOT_BUILT")
+
+    return {
+        "pipeline": parsed["pipeline"],
+        "branch": parsed["branch"],
+        "run_number": parsed["run"],
+        "build_name": run_data.get("name", ""),
+        "result": run_data.get("result", "UNKNOWN"),
+        "state": run_data.get("state", "UNKNOWN"),
+        "start_time": run_data.get("startTime", ""),
+        "end_time": run_data.get("endTime", ""),
+        "duration_seconds": total_duration,
+        "commit_id": run_data.get("commitId", ""),
+        "causes": [c.get("shortDescription", "") for c in run_data.get("causes", [])],
+        "blue_ocean_url": _jenkins_blue_ocean_url(parsed),
+        "summary": {
+            "total_stages": len(stages),
+            "succeeded": succeeded,
+            "failed": failed,
+            "skipped": skipped,
+        },
+        "stages": stages,
+        "failure_details": failure_details,
+    }
+
+
+# ------------------------------------------------
 # ENTRY POINT
 # ------------------------------------------------
 

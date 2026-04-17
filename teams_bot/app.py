@@ -1109,6 +1109,130 @@ def _format_build_failure_done(build_id: int, result: dict) -> str:
     return "\n".join(parts)
 
 
+# ── Jenkins Pipeline Failure Fast-Path ──
+
+_JENKINS_URL_RE = re.compile(
+    r'https?://[^\s]+jenkins[^\s]*/(blue/organizations/jenkins/[^\s]+|job/[^\s]+)',
+    re.IGNORECASE,
+)
+
+_JENKINS_KEYWORDS_RE = re.compile(
+    r'jenkins\s*(pipeline|failure|fail|build|run|analyze|broken|red|unstable)',
+    re.IGNORECASE,
+)
+
+
+def _try_jenkins_fast_path(message: str) -> str | None:
+    """Detect Jenkins pipeline URLs and analyze failures directly."""
+    from TFSMCP import jenkins_analyze_failure
+
+    url_match = _JENKINS_URL_RE.search(message)
+    if not url_match:
+        return None
+
+    url = url_match.group(0).rstrip('.,;:!?)')
+    logger.info(f"Fast-path: Jenkins pipeline analysis for {url}")
+
+    try:
+        result = jenkins_analyze_failure(url)
+        if isinstance(result, str):
+            import json as _json
+            result = _json.loads(result)
+        return _format_jenkins_analysis(url, result)
+    except Exception as e:
+        logger.error(f"Fast-path Jenkins analysis failed: {e}")
+        return f"❌ Error analyzing Jenkins pipeline: {e}"
+
+
+def _format_jenkins_analysis(url: str, result: dict) -> str:
+    """Format jenkins_analyze_failure output for Teams."""
+    if result.get("error"):
+        return f"❌ **Jenkins Analysis Failed**\n\n{result['error']}"
+
+    pipeline = result.get("pipeline", "")
+    branch = result.get("branch", "")
+    run_number = result.get("run_number", "")
+    run_result = result.get("result", "UNKNOWN")
+    duration_s = result.get("duration_seconds", 0)
+    commit = (result.get("commit_id") or "")[:8]
+    summary = result.get("summary", {})
+    stages = result.get("stages", [])
+    failure_details = result.get("failure_details", [])
+
+    result_emoji = {
+        "SUCCESS": "✅", "UNSTABLE": "⚠️", "FAILURE": "❌",
+        "ABORTED": "⏹️", "NOT_BUILT": "⬜",
+    }.get(run_result, "❓")
+
+    parts = [
+        f"{result_emoji} **Jenkins Pipeline: {pipeline}**\n",
+        f"- **Branch**: {branch} | **Run**: #{run_number}",
+        f"- **Result**: {run_result} | **Duration**: {duration_s}s",
+    ]
+    if commit:
+        parts.append(f"- **Commit**: `{commit}`")
+
+    causes = result.get("causes", [])
+    if causes:
+        parts.append(f"- **Trigger**: {causes[0]}")
+
+    # Stage summary
+    total = summary.get("total_stages", len(stages))
+    succeeded = summary.get("succeeded", 0)
+    failed = summary.get("failed", 0)
+    skipped = summary.get("skipped", 0)
+    parts.append(f"\n**Stages**: {total} total | ✅ {succeeded} passed | ❌ {failed} failed/unstable | ⬜ {skipped} skipped\n")
+
+    # Failed stages detail
+    if failure_details:
+        parts.append("### Failed / Unstable Stages\n")
+        for fd in failure_details:
+            stage_name = fd.get("node_name", "Unknown")
+            node_id = fd.get("node_id", "")
+            # Find the stage result
+            stage_result = "FAILURE"
+            for s in stages:
+                if s.get("id") == node_id:
+                    stage_result = s.get("result", "FAILURE")
+                    break
+            stage_emoji = "❌" if stage_result == "FAILURE" else "⚠️"
+            parts.append(f"{stage_emoji} **{stage_name}** (node {node_id}) — {stage_result}")
+
+            # Failed steps within this stage
+            failed_steps = fd.get("failed_steps", [])
+            if failed_steps:
+                for step in failed_steps[:5]:
+                    step_name = step.get("name", "")
+                    step_desc = step.get("description", "")
+                    desc_text = f" — {step_desc}" if step_desc else ""
+                    parts.append(f"  └─ {step_name}{desc_text}")
+
+            # Error summary
+            error_summary = fd.get("error_summary", "")
+            if error_summary:
+                # Trim to last 500 chars for readability
+                excerpt = error_summary[-500:].strip() if len(error_summary) > 500 else error_summary.strip()
+                parts.append(f"\n```\n{excerpt}\n```\n")
+            elif fd.get("log_tail"):
+                # Show tail of log if no error summary
+                log_tail = fd["log_tail"]
+                excerpt = log_tail[-500:].strip() if len(log_tail) > 500 else log_tail.strip()
+                parts.append(f"\n```\n{excerpt}\n```\n")
+
+            # TFS build cross-reference
+            tfs_build_id = fd.get("tfs_build_id")
+            tfs_build_link = fd.get("tfs_build_link")
+            if tfs_build_id:
+                tfs_url = tfs_build_link or f"http://dev-tfs:8080/tfs/HylandCollection/OnBase/_build/results?buildId={tfs_build_id}"
+                parts.append(f"  🔗 **TFS Build**: [{tfs_build_id}]({tfs_url})\n")
+
+    # Blue Ocean link
+    bo_url = result.get("blue_ocean_url", url)
+    parts.append(f"\n🔗 [View in Jenkins Blue Ocean]({bo_url})")
+
+    return "\n".join(parts)
+
+
 # ── Endpoints ──
 
 @app.get("/")
@@ -1256,6 +1380,24 @@ def chat(req: ChatRequest, x_api_key: str | None = Header(None)):
 
         # ── Fast-path: Build failure analysis bypass LLM ──
         fast_result = _try_build_failure_fast_path(req.message)
+        if fast_result is not None:
+            enriched = enrich_response(
+                response_text=fast_result,
+                user_message=req.message,
+                agent_used="tfs_jira",
+                conversation_id=conversation_id,
+                tool_calls_made=1,
+            )
+            return ChatResponse(
+                response=enriched,
+                agent_used="tfs_jira",
+                conversation_id=conversation_id,
+                tool_calls_made=1,
+                suggested_actions=get_suggested_actions(fast_result, req.message),
+            )
+
+        # ── Fast-path: Jenkins pipeline failure analysis bypass LLM ──
+        fast_result = _try_jenkins_fast_path(req.message)
         if fast_result is not None:
             enriched = enrich_response(
                 response_text=fast_result,

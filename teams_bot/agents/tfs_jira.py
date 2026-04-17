@@ -7,13 +7,15 @@ DESCRIPTION = (
     "review shelvesets, inspect builds, search GitHub PRs, query BuildDirector for "
     "OnBase build information (latest builds, BOTW history, build schedules), "
     "correlate Jira cards with builds, search ProGet for NuGet/npm packages, "
+    "analyze Jenkins pipeline failures, "
     "and suggest test scenarios. "
     "Use for: Jira ticket analysis, TFS changeset review, build failures, GitHub PR review, "
-    "build failure analysis, pipeline failure root cause, "
+    "build failure analysis, pipeline failure root cause, Jenkins pipeline analysis, "
     "test gap analysis, code diff inspection, shelveset code review, "
     "OnBase build queries, latest build lookup, BuildDirector, build history, build versions, "
     "BOTW schedule, build calendar, fixed in build, cards in build, publish dates, "
-    "ProGet package search, NuGet package versions, package check."
+    "ProGet package search, NuGet package versions, package check, "
+    "Jenkins pipeline failure, Jenkins build analysis."
 )
 
 SYSTEM_PROMPT = """\
@@ -111,6 +113,26 @@ When the user says "analyze build failure", "root cause", "why did build fail", 
 → Include a link to the ProGet search page.
 - **Version format**: major.minor.servicePack.buildNumber (e.g. 25.2.12.1000)
 - **Version aliases**: DEV=26.1, 24=24.1, 25=25.1, etc.
+
+## Jenkins SKILL — Pipeline Failure Analysis
+
+### "Analyze this Jenkins pipeline" / paste a Jenkins URL
+→ Use **jenkins_analyze_failure**(url). Accepts Blue Ocean or classic Jenkins URLs.
+→ Returns: run metadata, all stages, failure details with logs, TFS build cross-references, error summaries.
+→ Jenkins pipelines can trigger TFS builds — when a stage fails, check the extracted TFS build ID for deeper analysis.
+
+### Quick stage status
+→ Use **jenkins_get_run**(url). Returns run result, all stages, and which stages failed.
+
+### Get specific stage failure logs
+→ Use **jenkins_get_failure_log**(url, node_id). Fetches logs for a specific stage or auto-detects failed stages.
+
+### Key facts
+- **Jenkins URL**: https://csp.jenkins.hylandqa.net (CSP Jenkins — anonymous access)
+- **URL format**: Blue Ocean → `/blue/organizations/jenkins/{pipeline}/detail/{branch}/{run}/pipeline/{nodeId}`
+- **Stages = Nodes**: Each pipeline stage has a numeric node ID
+- **TFS cross-reference**: Jenkins stages often trigger TFS builds — extract the TFS buildId from logs for deeper analysis with `start_build_failure_analysis`
+- **SSL**: Self-signed cert, requests use verify=False
 
 ## Workflow for Code Review (ASYNC — two-step process)
 When the user asks for a **code review**, **review code**, or **HTML report**:

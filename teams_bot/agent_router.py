@@ -30,6 +30,7 @@ _TFS_KEYWORDS = re.compile(
     r"build calendar|build schedule|publish date|lockdown date|"
     r"fixed in.{0,10}build|cards in build|jira.{0,10}build|build.{0,10}jira|"
     r"proget|package.{0,10}version|package.{0,10}check|nuget|"
+    r"jenkins|jenkins.{0,10}pipeline|jenkins.{0,10}fail|csp\.jenkins|"
     r"compare.{0,10}branch|compare.{0,10}dev|compare.{0,10}\d{2}\.\d|"
     r"branch.{0,10}diff|branch.{0,10}compare)\b", re.IGNORECASE
 )

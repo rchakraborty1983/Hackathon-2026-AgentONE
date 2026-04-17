@@ -97,6 +97,10 @@ from TFSMCP import (
     GITHUB_REPO_ALIASES,
     # ProGet
     proget_search_packages,
+    # Jenkins
+    jenkins_get_run,
+    jenkins_get_failure_log,
+    jenkins_analyze_failure,
 )
 
 # ── Python type → JSON Schema type mapping ──
@@ -198,6 +202,7 @@ TOOL_GROUPS = {
     "build_failure_analysis": {"start_build_failure_analysis", "get_build_failure_analysis_status",
                                "get_build_timeline", "get_build_log_content"},
     "proget": {"proget_search_packages"},
+    "jenkins": {"jenkins_get_run", "jenkins_get_failure_log", "jenkins_analyze_failure"},
 }
 
 # Map keywords in user query → which tool groups to include
@@ -263,6 +268,11 @@ _KEYWORD_GROUPS = {
     "fix vulnerability": ["ghas_fix", "github_write"],
     # ProGet
     "proget": ["proget"],
+    "jenkins": ["jenkins"],
+    "jenkins pipeline": ["jenkins"],
+    "jenkins failure": ["jenkins"],
+    "csp.jenkins": ["jenkins"],
+    "jenkins.hylandqa": ["jenkins"],
     "package": ["proget"],
     "nuget": ["proget"],
     "cefsharp": ["proget"],
@@ -914,6 +924,33 @@ _register("proget_search_packages", proget_search_packages,
               "top": {"type": "integer", "default": 10, "description": "Max results to return."},
           }, "required": ["package_name"]})
 
+# --- Jenkins ---
+_register("jenkins_get_run", jenkins_get_run,
+          "Get Jenkins pipeline run details from a Blue Ocean or classic URL. "
+          "Returns: run metadata (result, state, duration, commit), all stage results, and failed stages. "
+          "Use when user pastes a Jenkins URL or asks about a Jenkins pipeline run.",
+          {"type": "object", "properties": {
+              "url": {"type": "string", "description": "Jenkins Blue Ocean or classic URL for a pipeline run."},
+          }, "required": ["url"]})
+
+_register("jenkins_get_failure_log", jenkins_get_failure_log,
+          "Get detailed failure logs for a Jenkins pipeline run. "
+          "Fetches logs for specific stage or auto-detects all failed stages. "
+          "Returns: failure logs, failed steps with individual logs, error messages.",
+          {"type": "object", "properties": {
+              "url": {"type": "string", "description": "Jenkins Blue Ocean or classic URL."},
+              "node_id": {"type": "string", "default": "", "description": "Optional specific stage node ID. If empty, auto-detects failed stages."},
+          }, "required": ["url"]})
+
+_register("jenkins_analyze_failure", jenkins_analyze_failure,
+          "Comprehensive Jenkins pipeline failure analysis. "
+          "Combines run metadata, all stage results, failure logs, failed steps, "
+          "TFS build cross-references, and error summaries into a complete report. "
+          "Use when user asks to analyze or investigate a Jenkins pipeline failure.",
+          {"type": "object", "properties": {
+              "url": {"type": "string", "description": "Jenkins Blue Ocean or classic URL for a pipeline run."},
+          }, "required": ["url"]})
+
 
 # ── Agent ↔ Tool mapping ──
 AGENT_TOOL_MAP = {
@@ -938,6 +975,7 @@ AGENT_TOOL_MAP = {
         "start_build_failure_analysis", "get_build_failure_analysis_status",
         "get_build_timeline", "get_build_log_content",
         "proget_search_packages",
+        "jenkins_get_run", "jenkins_get_failure_log", "jenkins_analyze_failure",
     },
     "onbase": {
         "get_analysis_bundle", "start_code_review", "get_code_review_status",
@@ -955,6 +993,7 @@ AGENT_TOOL_MAP = {
         "start_build_failure_analysis", "get_build_failure_analysis_status",
         "get_build_timeline", "get_build_log_content",
         "proget_search_packages",
+        "jenkins_get_run", "jenkins_get_failure_log", "jenkins_analyze_failure",
     },
     "mrg_parser": {
         "get_jira_context", "search_jira",
