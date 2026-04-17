@@ -172,7 +172,8 @@ I'm your **AI-powered DevOps companion** for the OnBase codebase. Here's what I 
 | 📝 **Code Review** | *code review SBPWC-12345* | Generates an AI-powered HTML code review report |
 | 🏗️ **Build Queries** | *latest build for 25.2* | Checks BuildDirector for build status and history |
 | ❌ **Failure Analysis** | *analyze build failure 812151* | AI root cause analysis with HTML report |
-| 🔀 **Branch Compare** | *compare DEV and 25.1 for file.cs* | Side-by-side code comparison across branches |
+| � **Jenkins Pipeline** | *analyze Jenkins failure <URL>* | Jenkins build failure analysis with TFS cross-refs |
+| �🔀 **Branch Compare** | *compare DEV and 25.1 for file.cs* | Side-by-side code comparison across branches |
 | 🐙 **GitHub Ops** | *create PR for SBPWC-12345* | Creates branches, pushes files, opens PRs |
 | 📚 **OnBase Docs** | *how to configure WorkView Filters?* | Queries the Module Reference Guide |
 | ♿ **Accessibility** | *audit login page accessibility* | WCAG compliance checks and test generation |
@@ -215,6 +216,7 @@ SKILL_MENU = """\
 | `build calendar for <version>` | Upcoming milestones and lockdowns |
 | `what cards are in build <number>?` | Jira cards included in a build |
 | `analyze build failure <build_id>` | AI root cause analysis for failed builds |
+| `analyze Jenkins failure <URL>` | Jenkins pipeline failure analysis with TFS cross-refs |
 
 ### 🐙 GitHub Operations
 | Command | Description |

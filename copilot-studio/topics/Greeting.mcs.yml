@@ -2,7 +2,7 @@ mcs.metadata:
   componentName: Greeting
   description: This topic is triggered when the user greets the agent.
 kind: AdaptiveDialog
-modelDescription: "Only use this topic for greetings like Hello, Hi, Hey, Good morning. Do NOT use this topic for: Product guidance, Confluence assistant, Jira assistant, Code review, Build query, BOTW schedule, Branch compare, Build failure, Package check, GitHub PR, GHAS alerts, Salesforce cases. Those must go to the Chat with OnBase DevOps Agent tool."
+modelDescription: "Only use this topic for greetings like Hello, Hi, Hey, Good morning. Do NOT use this topic for: Product guidance, Confluence assistant, Jira assistant, Code review, Build query, BOTW schedule, Branch compare, Build failure, Package check, GitHub PR, GHAS alerts, Jenkins pipeline, Salesforce cases. Those must go to the Chat with OnBase DevOps Agent tool."
 beginDialog:
   kind: OnRecognizedIntent
   id: main
@@ -46,6 +46,8 @@ beginDialog:
         **🐙 GitHub PR — "_Create a PR in GHAS-POC-AngularClient repo in HylandFoundation org for solving code-scanning/747 alert_"**
 
         **🛡️ GHAS Alerts — "_List top 5 code scanning alerts with "Critical" or "High" severity for GHAS-POC-AngularClient repo in HylandFoundation org_"**
+
+        **🔧 Jenkins Pipeline — "_Analyze Jenkins failure https://csp.jenkins.hylandqa.net/job/Bacon/job/ApiServer/job/GitApiServer/job/PR-914/1/_"**
 
         **🎫 Salesforce Cases — "_Get me top 5 most critical customer issue trends for OnBase from Salesforce cases_"**
 

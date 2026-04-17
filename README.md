@@ -62,6 +62,7 @@ GitHub Copilot custom agent instructions used in VS Code for OnBase development:
 | Build Queries | "latest build for 25.2", "what is the next BOTW date?" |
 | Branch Compare | "compare DEV and 25.1 for WorkViewUtility.cs" |
 | Build Failure | "analyze build failure for 25.2" |
+| Jenkins Pipeline | "analyze Jenkins failure https://csp.jenkins.hylandqa.net/job/.../PR-914/1/" |
 | GitHub PR | "create PR for SBPWC-12345" |
 | GHAS Alerts | "show Critical GHAS alerts for HylandFoundation org" |
 | Package Check | "latest cefsharp package on ProGet" |

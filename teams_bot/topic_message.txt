@@ -25,6 +25,8 @@ Agent ONE reporting. Everything you need. One place. One agent. You say it — I
 
 🛡️ GHAS Alerts — "List top 5 code scanning alerts with "Critical" or "High" severity for GHAS-POC-AngularClient repo in HylandFoundation org"
 
+🔧 Jenkins Pipeline — "Analyze Jenkins failure https://csp.jenkins.hylandqa.net/job/Bacon/job/ApiServer/job/GitApiServer/job/PR-914/1/"
+
 🎫 Salesforce Cases — "Get me top 5 most critical customer issue trends for OnBase from Salesforce cases"
 
 Or just ask any question — I'll figure out the rest!

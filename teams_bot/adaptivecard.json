@@ -28,7 +28,8 @@
                         { "type": "TextBlock", "text": "\ud83c\udfd7\ufe0f **Build Questions**", "spacing": "Small" },
                         { "type": "TextBlock", "text": "\ud83d\udd00 **Branch Compare**", "spacing": "Small" },
                         { "type": "TextBlock", "text": "\ud83d\udce6 **Package Check**", "spacing": "Small" },
-                        { "type": "TextBlock", "text": "\ud83d\udee1\ufe0f **GHAS Alerts**", "spacing": "Small" }
+                        { "type": "TextBlock", "text": "\ud83d\udee1\ufe0f **GHAS Alerts**", "spacing": "Small" },
+                        { "type": "TextBlock", "text": "\ud83d\udd27 **Jenkins Pipeline**", "spacing": "Small" }
                     ]
                 },
                 {
