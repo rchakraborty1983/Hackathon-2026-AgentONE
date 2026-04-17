@@ -224,6 +224,9 @@ _BUILD_FAILURE_STATUS_PATTERNS = re.compile(
 # Version extraction: "25.2", "24.1", "DEV", "26.1" etc.
 _VERSION_RE = re.compile(r'\b(\d{2}\.\d)\b|\b(DEV)\b', re.IGNORECASE)
 
+# Full 4-part build version in conversation history (e.g. "26.1.0.447")
+_FULL_BUILD_VERSION_RE = re.compile(r'\b(\d{2}\.\d+\.\d+\.\d+)\b')
+
 _BOTW_PATTERNS = re.compile(
     r'botw|build\s+of\s+the\s+week|next\s+build|build\s+date|'
     r'build\s+schedule|build\s+calendar|lockdown\s+date|'
@@ -231,6 +234,102 @@ _BOTW_PATTERNS = re.compile(
     r'upcoming\s+build|build\s+cycle',
     re.IGNORECASE,
 )
+
+# ── "What changed since previous build" fast-path ──
+_WHAT_CHANGED_PATTERNS = re.compile(
+    r'what\s+changed\s+since\s+(?:the\s+)?previous\s+build|'
+    r'what\s+changed\s+(?:in|from|between)\s+(?:the\s+)?(?:last|previous|latest)\s+build|'
+    r'what.*cards.*(?:in|for)\s+(?:this|the\s+latest|the\s+last)\s+build|'
+    r'what\s+(?:is|are)\s+(?:in|included\s+in)\s+(?:this|the\s+latest)\s+build|'
+    r'changes?\s+(?:in|from)\s+(?:the\s+)?(?:last|latest|previous)\s+build',
+    re.IGNORECASE,
+)
+
+
+def _extract_build_version_from_history(conversation_id: str) -> str | None:
+    """Extract the most recent full build version (X.Y.Z.W) from conversation history."""
+    history = _conversations.get(conversation_id, [])
+    # Scan backwards — most recent messages first
+    for msg in reversed(history):
+        content = msg.get("content", "") if isinstance(msg, dict) else ""
+        if not content:
+            continue
+        matches = _FULL_BUILD_VERSION_RE.findall(content)
+        if matches:
+            return matches[-1]  # last occurrence in the message
+    return None
+
+
+def _try_what_changed_fast_path(message: str, conversation_id: str) -> str | None:
+    """Detect 'what changed since previous build' and use JQL to get correct cards."""
+    if not _WHAT_CHANGED_PATTERNS.search(message):
+        return None
+
+    # Try to get build version from the message itself first
+    ver_match = _FULL_BUILD_VERSION_RE.search(message)
+    current_build = ver_match.group(1) if ver_match else None
+
+    # Fall back to conversation history
+    if not current_build:
+        current_build = _extract_build_version_from_history(conversation_id)
+
+    if not current_build:
+        logger.info("Fast-path: 'what changed' detected but no build version in context")
+        return None
+
+    logger.info(f"Fast-path: 'what changed' for build {current_build}")
+
+    from TFSMCP import jira_cards_in_build, bd_list_builds
+
+    try:
+        # Get the cards in the current build via JQL
+        cards_result = jira_cards_in_build(current_build)
+        cards = cards_result.get("cards", [])
+
+        # Determine the previous build version for context
+        parts = current_build.split(".")
+        major_minor = f"{parts[0]}.{parts[1]}"
+        prev_build = None
+        try:
+            builds_data = bd_list_builds(major_minor, top=5, successful_only=True)
+            builds_list = builds_data.get("builds", [])
+            for i, b in enumerate(builds_list):
+                if b.get("version") == current_build and i + 1 < len(builds_list):
+                    prev_build = builds_list[i + 1].get("version")
+                    break
+        except Exception as e:
+            logger.warning(f"Could not determine previous build: {e}")
+
+        return _format_what_changed_response(current_build, prev_build, cards, cards_result.get("jql_used", ""))
+    except Exception as e:
+        logger.error(f"Fast-path 'what changed' failed: {e}")
+        return f"Error fetching cards for build {current_build}: {e}"
+
+
+def _format_what_changed_response(current_build: str, prev_build: str | None,
+                                   cards: list, jql_used: str) -> str:
+    """Format the 'what changed' response with Jira cards in the build."""
+    if prev_build:
+        parts = [f"The changes included in OnBase build **{current_build}** compared to "
+                 f"the previous build **{prev_build}** are associated with these Jira cards:\n"]
+    else:
+        parts = [f"The Jira cards fixed in OnBase build **{current_build}**:\n"]
+
+    if not cards:
+        parts.append("No Jira cards found with this build number in the 'Fixed In Build' field.")
+        parts.append(f"\n*JQL used: `{jql_used}`*")
+        return "\n".join(parts)
+
+    for i, card in enumerate(cards, 1):
+        key = card.get("key", "")
+        summary = card.get("summary", card.get("fields", {}).get("summary", "N/A"))
+        status = card.get("status", card.get("fields", {}).get("status", {}).get("name", ""))
+        jira_url = f"https://hyland.atlassian.net/browse/{key}"
+        parts.append(f"{i}. [{key}]({jira_url}): {summary}")
+
+    parts.append(f"\nIf you want, I can provide more detailed information or diffs for these specific changes.")
+
+    return "\n".join(parts)
 
 
 def _try_build_fast_path(message: str) -> str | None:
@@ -1158,6 +1257,32 @@ def chat(req: ChatRequest, x_api_key: str | None = Header(None)):
         # ── Fast-path: Build failure analysis bypass LLM ──
         fast_result = _try_build_failure_fast_path(req.message)
         if fast_result is not None:
+            enriched = enrich_response(
+                response_text=fast_result,
+                user_message=req.message,
+                agent_used="tfs_jira",
+                conversation_id=conversation_id,
+                tool_calls_made=1,
+            )
+            return ChatResponse(
+                response=enriched,
+                agent_used="tfs_jira",
+                conversation_id=conversation_id,
+                tool_calls_made=1,
+                suggested_actions=get_suggested_actions(fast_result, req.message),
+            )
+
+        # ── Fast-path: "What changed since previous build" — JQL-based ──
+        fast_result = _try_what_changed_fast_path(req.message, conversation_id)
+        if fast_result is not None:
+            # Save to conversation history so follow-ups have context
+            history = _conversations.get(conversation_id, [])
+            history.append({"role": "user", "content": req.message})
+            history.append({"role": "assistant", "content": fast_result})
+            if len(history) > MAX_HISTORY * 2:
+                history = history[-(MAX_HISTORY * 2):]
+            _conversations[conversation_id] = history
+
             enriched = enrich_response(
                 response_text=fast_result,
                 user_message=req.message,
