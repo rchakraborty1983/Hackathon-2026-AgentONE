@@ -181,6 +181,45 @@ _CODE_REVIEW_STATUS_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
+# ── GHAS Fix + PR fast-path patterns ──
+# Detect "fix alert #747 and create PR" style requests
+_GHAS_FIX_PR_START_PATTERNS = re.compile(
+    r'fix\s+.*alert\s*#?\s*(\d+).*\b(pr|pull\s*request)\b|'
+    r'\b(pr|pull\s*request)\b.*fix\s+.*alert\s*#?\s*(\d+)|'
+    r'fix\s+.*ghas\s*.*alert\s*#?\s*(\d+)|'
+    r'fix\s+.*(?:code\s*scanning|security)\s+alert\s*#?\s*(\d+).*\b(pr|pull\s*request)\b',
+    re.IGNORECASE,
+)
+_GHAS_ALERT_NUMBER_RE = re.compile(r'alert\s*#?\s*(\d+)', re.IGNORECASE)
+_GHAS_REPO_RE = re.compile(r'\b(?:in|on|for|repo)\s+(\S+)', re.IGNORECASE)
+
+# Detect GHAS fix PR status checks
+_GHAS_FIX_PR_STATUS_PATTERNS = re.compile(
+    r'(?:pr|pull\s*request|fix)\s+status.*alert\s*#?\s*(\d+)|'
+    r'status.*(?:pr|fix|pull\s*request).*alert\s*#?\s*(\d+)|'
+    r'is\s+the\s+(?:pr|fix)\s+(?:done|ready).*alert\s*#?\s*(\d+)|'
+    r'alert\s*#?\s*(\d+).*(?:pr|fix)\s+(?:status|done|ready|progress)',
+    re.IGNORECASE,
+)
+
+# ── Build failure analysis fast-path patterns ──
+_BUILD_FAILURE_START_PATTERNS = re.compile(
+    r'(?:analyze|investigate|diagnose|check)\s+(?:build\s+)?failure.*\b(\d+)\b|'
+    r'build\s+(\d+)\s+(?:fail|failure|broke|broken|red)|'
+    r'why\s+did\s+build\s+(\d+)\s+fail|'
+    r'build\s+failure.*\b(\d+)\b|'
+    r'failure\s+(?:analysis|report).*build\s*(?:#?\s*)?(\d+)',
+    re.IGNORECASE,
+)
+
+_BUILD_FAILURE_STATUS_PATTERNS = re.compile(
+    r'(?:build\s+)?failure\s+(?:analysis\s+)?status.*\b(\d+)\b|'
+    r'status.*(?:build\s+)?failure.*\b(\d+)\b|'
+    r'is\s+the\s+(?:build\s+)?failure\s+(?:analysis\s+)?(?:done|ready).*\b(\d+)\b|'
+    r'build\s+(\d+)\s+failure\s+(?:status|done|ready|progress)',
+    re.IGNORECASE,
+)
+
 # ── Build/BOTW fast-path patterns ──
 # Version extraction: "25.2", "24.1", "DEV", "26.1" etc.
 _VERSION_RE = re.compile(r'\b(\d{2}\.\d)\b|\b(DEV)\b', re.IGNORECASE)
@@ -630,6 +669,347 @@ def _format_review_status(jira_key: str, result: dict) -> str:
         return result.get("message", f"Review status for {jira_key}: {status}")
 
 
+# ── GHAS Fix + PR Fast-Path ──
+
+def _try_ghas_fix_pr_fast_path(message: str) -> str | None:
+    """Detect GHAS fix + PR requests and route to start/status directly."""
+    from TFSMCP import start_ghas_fix_pr, get_ghas_fix_pr_status, resolve_github_repo, GITHUB_ORG
+
+    # Check for status request first
+    status_match = _GHAS_FIX_PR_STATUS_PATTERNS.search(message)
+    if status_match:
+        alert_num = next((g for g in status_match.groups() if g), None)
+        if alert_num:
+            owner, repo = _extract_repo_from_message(message)
+            if owner and repo:
+                logger.info(f"Fast-path: GHAS fix PR STATUS for {owner}/{repo} alert #{alert_num}")
+                try:
+                    result = get_ghas_fix_pr_status(owner, repo, int(alert_num))
+                    return _format_ghas_fix_status(owner, repo, int(alert_num), result)
+                except Exception as e:
+                    logger.error(f"Fast-path GHAS fix status failed: {e}")
+                    return f"Error checking GHAS fix status: {e}"
+
+    # Check for start request
+    if _GHAS_FIX_PR_START_PATTERNS.search(message):
+        alert_match = _GHAS_ALERT_NUMBER_RE.search(message)
+        if alert_match:
+            alert_num = int(alert_match.group(1))
+            owner, repo = _extract_repo_from_message(message)
+            if owner and repo:
+                logger.info(f"Fast-path: START GHAS fix PR for {owner}/{repo} alert #{alert_num}")
+                try:
+                    result = start_ghas_fix_pr(owner, repo, alert_num)
+                    return _format_ghas_fix_start(owner, repo, alert_num, result)
+                except Exception as e:
+                    logger.error(f"Fast-path GHAS fix start failed: {e}")
+                    return f"Error starting GHAS fix for alert #{alert_num}: {e}"
+
+    return None
+
+
+def _extract_repo_from_message(message: str) -> tuple[str, str]:
+    """Extract owner/repo from message. Returns (owner, repo) or ('', '')."""
+    from TFSMCP import resolve_github_repo, GITHUB_ORG
+
+    # Look for "owner/repo" pattern
+    repo_pattern = re.compile(r'(?:in|on|for|repo)\s+(\S+/\S+)', re.IGNORECASE)
+    m = repo_pattern.search(message)
+    if m:
+        parts = m.group(1).strip().rstrip(",.?!").split("/", 1)
+        if len(parts) == 2:
+            return parts[0], parts[1]
+
+    # Look for just a repo name (assume GITHUB_ORG)
+    repo_name_pattern = re.compile(r'(?:in|on|for|repo)\s+([A-Za-z0-9_.-]+)', re.IGNORECASE)
+    m = repo_name_pattern.search(message)
+    if m:
+        repo_name = m.group(1).strip().rstrip(",.?!")
+        # Filter out common non-repo words
+        if repo_name.lower() not in ("the", "a", "this", "my", "our", "that", "alert", "build", "failure", "status", "pr", "fix", "done", "ready"):
+            owner, repo = resolve_github_repo(repo_name)
+            return owner, repo
+
+    # Look for known repo names directly in the message
+    known_repos = ["GHAS-POC-AngularClient", "GHAS-POC-ReactClient", "GHAS-POC-DotNetAPI"]
+    for kr in known_repos:
+        if kr.lower() in message.lower():
+            return GITHUB_ORG, kr
+
+    return "", ""
+
+
+def _format_ghas_fix_start(owner: str, repo: str, alert_number: int, result: dict) -> str:
+    """Format the start_ghas_fix_pr result."""
+    status = result.get("status", "unknown")
+
+    if status == "started":
+        return (
+            f"🔧 **GHAS Fix + PR creation started for "
+            f"[{owner}/{repo}](https://github.com/{owner}/{repo}) "
+            f"alert #{alert_number}!**\n\n"
+            f"**What's happening:**\n"
+            f"1. Fetching alert details from GitHub\n"
+            f"2. Retrieving the affected source file\n"
+            f"3. Generating code fix with AI\n"
+            f"4. Creating a fix branch\n"
+            f"5. Pushing the fixed code\n"
+            f"6. Opening a pull request\n\n"
+            f"⏱️ **Estimated time**: ~15-20 seconds\n\n"
+            f"⚠️ **Important**: Check back by asking:\n\n"
+            f"> **\"PR status for alert #{alert_number} in {repo}\"**\n\n"
+            f"The PR WILL be created — just check back in about 20 seconds."
+        )
+    elif status == "running":
+        pct = result.get("progress_pct", 0)
+        phase_desc = result.get("phase_description", "In progress...")
+        elapsed = result.get("elapsed_seconds", 0)
+        return (
+            f"**GHAS fix already in progress for alert #{alert_number}** ⏳\n\n"
+            f"- **Progress**: {pct}% — {phase_desc}\n"
+            f"- **Elapsed**: {elapsed:.0f}s\n\n"
+            f"Check back by asking **\"PR status for alert #{alert_number} in {repo}\"**."
+        )
+    elif status == "done":
+        return _format_ghas_fix_done(owner, repo, alert_number, result)
+    else:
+        return result.get("message", f"GHAS fix for alert #{alert_number}: {status}")
+
+
+def _format_ghas_fix_status(owner: str, repo: str, alert_number: int, result: dict) -> str:
+    """Format the get_ghas_fix_pr_status result."""
+    status = result.get("status", "unknown")
+
+    if status == "done":
+        return _format_ghas_fix_done(owner, repo, alert_number, result)
+
+    elif status == "running":
+        pct = result.get("progress_pct", 0)
+        phase_desc = result.get("phase_description", "In progress...")
+        elapsed = result.get("elapsed_seconds", 0)
+        return (
+            f"**GHAS fix for alert #{alert_number} is still running** ⏳\n\n"
+            f"- **Progress**: {pct}% — {phase_desc}\n"
+            f"- **Elapsed**: {elapsed:.0f}s\n\n"
+            f"Check again in about {max(5, 20 - round(elapsed))} seconds."
+        )
+
+    elif status == "error":
+        error = result.get("error", "Unknown error")
+        return (
+            f"**GHAS fix for alert #{alert_number} failed** ❌\n\n"
+            f"Error: {error}\n\n"
+            f"You can retry by asking: **\"fix alert #{alert_number} in {repo} and create PR\"**"
+        )
+
+    elif status == "not_found":
+        return (
+            f"No GHAS fix job found for alert #{alert_number}. "
+            f"To start one, ask: **\"fix alert #{alert_number} in {repo} and create PR\"**"
+        )
+
+    else:
+        return result.get("message", f"GHAS fix status for alert #{alert_number}: {status}")
+
+
+def _format_ghas_fix_done(owner: str, repo: str, alert_number: int, result: dict) -> str:
+    """Format a completed GHAS fix + PR result."""
+    pr_url = result.get("pr_url", "")
+    pr_number = result.get("pr_number", "")
+    branch = result.get("branch", "")
+    alert_url = result.get("alert_url", "")
+    file_path = result.get("file_path", "")
+    elapsed = result.get("elapsed_seconds", 0)
+    severity = result.get("alert_severity", "")
+    rule = result.get("alert_rule", "")
+
+    parts = [
+        f"✅ **GHAS Fix + PR created for alert #{alert_number}!**\n",
+        f"- **Alert**: [{rule}]({alert_url}) (severity: {severity})",
+        f"- **File fixed**: `{file_path}`",
+        f"- **Branch**: `{branch}`",
+    ]
+    if pr_url:
+        parts.append(f"- **Pull Request**: [PR #{pr_number}]({pr_url})")
+    if elapsed:
+        parts.append(f"- **Completed in**: {elapsed}s")
+
+    parts.append(
+        f"\n🔍 **Next steps**: Please review the PR and merge if the fix looks correct."
+    )
+
+    return "\n".join(parts)
+
+
+# ── Build Failure Analysis Fast-Path ──
+
+def _try_build_failure_fast_path(message: str) -> str | None:
+    """Detect build failure analysis requests and route directly."""
+    from TFSMCP import start_build_failure_analysis, get_build_failure_analysis_status
+
+    # Extract build ID from TFS build URL if present (e.g. buildId=812833)
+    url_build_match = re.search(r'buildId=(\d+)', message, re.IGNORECASE)
+
+    # Check for status request first
+    status_match = _BUILD_FAILURE_STATUS_PATTERNS.search(message)
+    if status_match:
+        build_id = next((g for g in status_match.groups() if g), None)
+        if build_id:
+            logger.info(f"Fast-path: build failure STATUS for build {build_id}")
+            try:
+                result = get_build_failure_analysis_status(int(build_id))
+                return _format_build_failure_status(int(build_id), result)
+            except Exception as e:
+                logger.error(f"Fast-path build failure status failed: {e}")
+                return f"Error checking build failure analysis status: {e}"
+
+    # Check for start request (regex patterns OR TFS URL)
+    start_match = _BUILD_FAILURE_START_PATTERNS.search(message)
+    build_id_str = None
+    if start_match:
+        build_id_str = next((g for g in start_match.groups() if g), None)
+    elif url_build_match:
+        # URL like http://dev-tfs:8080/...?buildId=812833 with failure-related words
+        if re.search(r'fail|broke|broken|red|analyze|investigate|why|what\s+happened', message, re.IGNORECASE) or url_build_match:
+            build_id_str = url_build_match.group(1)
+
+    if build_id_str:
+        # Extract Jira key if present
+        jira_match = _JIRA_KEY_RE.search(message)
+        jira_key = jira_match.group(1) if jira_match else ""
+        logger.info(f"Fast-path: START build failure analysis for build {build_id_str} (jira={jira_key})")
+        try:
+            result = start_build_failure_analysis(int(build_id_str), jira_key)
+            return _format_build_failure_start(int(build_id_str), jira_key, result)
+        except Exception as e:
+            logger.error(f"Fast-path build failure start failed: {e}")
+            return f"Error starting build failure analysis: {e}"
+
+    return None
+
+
+def _format_build_failure_start(build_id: int, jira_key: str, result: dict) -> str:
+    """Format the start_build_failure_analysis result."""
+    status = result.get("status", "unknown")
+
+    if status == "started":
+        jira_note = ""
+        if jira_key:
+            jira_note = (
+                f"\n📎 The report will be **attached to "
+                f"[{jira_key}](https://hyland.atlassian.net/browse/{jira_key})** when done.\n"
+            )
+        return (
+            f"🔍 **Build failure analysis started for build {build_id}!**\n\n"
+            f"**What's happening:**\n"
+            f"1. Fetching build details and timeline\n"
+            f"2. Retrieving failed task logs\n"
+            f"3. Fetching associated changesets\n"
+            f"4. Gathering Jira context\n"
+            f"5. Running AI root cause analysis\n"
+            f"6. Generating HTML report\n"
+            f"7. Attaching report to Jira card\n\n"
+            f"⏱️ **Estimated time**: 40-60 seconds\n"
+            f"{jira_note}\n"
+            f"⚠️ Check back by asking:\n\n"
+            f"> **\"build failure status {build_id}\"**"
+        )
+    elif status == "running":
+        pct = result.get("progress_pct", 0)
+        phase_desc = result.get("phase_description", "In progress...")
+        elapsed = result.get("elapsed_seconds", 0)
+        return (
+            f"**Build failure analysis for build {build_id} is already running** ⏳\n\n"
+            f"- **Progress**: {pct}% — {phase_desc}\n"
+            f"- **Elapsed**: {elapsed:.0f}s\n\n"
+            f"Check back by asking **\"build failure status {build_id}\"**."
+        )
+    elif status == "done":
+        return _format_build_failure_done(build_id, result)
+    else:
+        return result.get("message", f"Build failure analysis for build {build_id}: {status}")
+
+
+def _format_build_failure_status(build_id: int, result: dict) -> str:
+    """Format the get_build_failure_analysis_status result."""
+    status = result.get("status", "unknown")
+
+    if status == "done":
+        return _format_build_failure_done(build_id, result)
+
+    elif status == "running":
+        pct = result.get("progress_pct", 0)
+        phase_desc = result.get("phase_description", "In progress...")
+        elapsed = result.get("elapsed_seconds", 0)
+        return (
+            f"**Build failure analysis for build {build_id} is still running** ⏳\n\n"
+            f"- **Progress**: {pct}% — {phase_desc}\n"
+            f"- **Elapsed**: {elapsed:.0f}s\n\n"
+            f"Check again in about {max(10, 55 - round(elapsed))} seconds."
+        )
+
+    elif status == "error":
+        error = result.get("error", "Unknown error")
+        return (
+            f"**Build failure analysis for build {build_id} failed** ❌\n\n"
+            f"Error: {error}\n\n"
+            f"You can retry by asking: **\"analyze build failure {build_id}\"**"
+        )
+
+    elif status == "not_found":
+        return (
+            f"No build failure analysis found for build {build_id}. "
+            f"To start one, ask: **\"analyze build failure {build_id}\"**"
+        )
+
+    else:
+        return result.get("message", f"Build failure status for build {build_id}: {status}")
+
+
+def _format_build_failure_done(build_id: int, result: dict) -> str:
+    """Format a completed build failure analysis result."""
+    root_cause = result.get("root_cause", "")
+    severity = result.get("severity", "")
+    category = result.get("failure_category", "")
+    jira_key = result.get("jira_key", "")
+    attachment_url = result.get("attachment_url", "")
+    report_path = result.get("report_local_path", "")
+    build_number = result.get("build_number", "")
+    definition = result.get("definition_name", "")
+    failed_count = result.get("failed_tasks_count", 0)
+    changesets_count = result.get("changesets_count", 0)
+    elapsed = result.get("elapsed_seconds", 0)
+
+    severity_emoji = {"Critical": "🔴", "High": "🟠", "Medium": "🟡", "Low": "🟢"}.get(severity, "ℹ️")
+
+    parts = [
+        f"✅ **Build Failure Analysis Complete — Build {build_id}**\n",
+    ]
+    if build_number:
+        parts.append(f"- **Build**: {build_number} ({definition})")
+    parts.append(f"- {severity_emoji} **Severity**: {severity}")
+    if category:
+        parts.append(f"- **Category**: {category}")
+    parts.append(f"- **Failed tasks**: {failed_count} | **Changesets**: {changesets_count}")
+    if root_cause:
+        parts.append(f"\n**Root Cause:**\n{root_cause}")
+
+    # Report link — prefer Jira attachment
+    if attachment_url and jira_key:
+        parts.append(
+            f"\n📄 **Full report**: [Download from Jira "
+            f"({jira_key})]({attachment_url})"
+        )
+    elif report_path:
+        full_url = get_report_url(report_path)
+        parts.append(f"\n📄 **Full report**: {full_url}")
+
+    if elapsed:
+        parts.append(f"\n⏱️ Completed in {elapsed}s")
+
+    return "\n".join(parts)
+
+
 # ── Endpoints ──
 
 @app.get("/")
@@ -741,6 +1121,42 @@ def chat(req: ChatRequest, x_api_key: str | None = Header(None)):
         # adds 5-15s of latency that can push past Copilot Studio's 30s timeout.
         # Detect the pattern directly and call start_code_review / get_code_review_status.
         fast_result = _try_code_review_fast_path(req.message)
+        if fast_result is not None:
+            enriched = enrich_response(
+                response_text=fast_result,
+                user_message=req.message,
+                agent_used="tfs_jira",
+                conversation_id=conversation_id,
+                tool_calls_made=1,
+            )
+            return ChatResponse(
+                response=enriched,
+                agent_used="tfs_jira",
+                conversation_id=conversation_id,
+                tool_calls_made=1,
+                suggested_actions=get_suggested_actions(fast_result, req.message),
+            )
+
+        # ── Fast-path: GHAS Fix + PR creation bypass LLM ──
+        fast_result = _try_ghas_fix_pr_fast_path(req.message)
+        if fast_result is not None:
+            enriched = enrich_response(
+                response_text=fast_result,
+                user_message=req.message,
+                agent_used="tfs_jira",
+                conversation_id=conversation_id,
+                tool_calls_made=1,
+            )
+            return ChatResponse(
+                response=enriched,
+                agent_used="tfs_jira",
+                conversation_id=conversation_id,
+                tool_calls_made=1,
+                suggested_actions=get_suggested_actions(fast_result, req.message),
+            )
+
+        # ── Fast-path: Build failure analysis bypass LLM ──
+        fast_result = _try_build_failure_fast_path(req.message)
         if fast_result is not None:
             enriched = enrich_response(
                 response_text=fast_result,

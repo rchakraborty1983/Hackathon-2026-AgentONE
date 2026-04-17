@@ -86,6 +86,9 @@ from TFSMCP import (
     create_or_update_github_file,
     push_github_files,
     create_github_pull_request,
+    # GHAS Fix + PR (async pipeline)
+    start_ghas_fix_pr,
+    get_ghas_fix_pr_status,
     # Build Failure Analysis (async pipeline)
     start_build_failure_analysis,
     get_build_failure_analysis_status,
@@ -189,6 +192,7 @@ TOOL_GROUPS = {
                    "github_code_scanning_alerts", "github_dependabot_alerts"},
     "github_write": {"github_create_branch", "github_create_or_update_file",
                      "github_push_files", "github_create_pr"},
+    "ghas_fix": {"start_ghas_fix_pr", "get_ghas_fix_pr_status"},
     "analysis": {"get_analysis_bundle"},
     "code_review": {"start_code_review", "get_code_review_status"},
     "build_failure_analysis": {"start_build_failure_analysis", "get_build_failure_analysis_status",
@@ -252,7 +256,11 @@ _KEYWORD_GROUPS = {
     "make changes": ["github_write", "github_core"],
     "repo": ["github_core", "github_org"],
     "dependabot": ["github_org"],
-    "scanning": ["github_org"],
+    "scanning": ["github_org", "ghas_fix"],
+    "ghas": ["github_org", "ghas_fix"],
+    "fix alert": ["ghas_fix", "github_write"],
+    "fix security": ["ghas_fix", "github_write"],
+    "fix vulnerability": ["ghas_fix", "github_write"],
     # ProGet
     "proget": ["proget"],
     "package": ["proget"],
@@ -875,6 +883,28 @@ _register("github_create_pr", _github_create_pr,
               "draft": {"type": "boolean", "default": False, "description": "Create as draft PR."},
           }, "required": ["repo", "title", "head"]})
 
+# --- GHAS Fix + PR (async pipeline) ---
+_register("start_ghas_fix_pr", start_ghas_fix_pr,
+          "Start a GHAS code scanning alert fix + PR creation IN THE BACKGROUND. Returns immediately (~1s). "
+          "Fetches alert details, retrieves the affected file, generates an AI fix, creates a branch, "
+          "pushes the fix, and opens a pull request. Takes ~20-30 seconds. "
+          "Use for 'fix alert #747 and create PR', 'fix GHAS alert 12', or 'fix security alert and open PR'.",
+          {"type": "object", "properties": {
+              "owner": {"type": "string", "description": "Repository owner (org or user)."},
+              "repo": {"type": "string", "description": "Repository name."},
+              "alert_number": {"type": "integer", "description": "Code scanning alert number to fix."},
+          }, "required": ["owner", "repo", "alert_number"]})
+
+_register("get_ghas_fix_pr_status", get_ghas_fix_pr_status,
+          "Check the status of a background GHAS fix + PR creation job. Returns progress info "
+          "if still running, or full results (PR URL, branch, commit) when done. "
+          "Use when user asks 'PR status for alert #747', 'is the fix done', or 'check PR status'.",
+          {"type": "object", "properties": {
+              "owner": {"type": "string", "description": "Repository owner."},
+              "repo": {"type": "string", "description": "Repository name."},
+              "alert_number": {"type": "integer", "description": "Code scanning alert number."},
+          }, "required": ["owner", "repo", "alert_number"]})
+
 # --- ProGet ---
 _register("proget_search_packages", proget_search_packages,
           "Search ProGet for NuGet/npm packages by name. Returns package versions sorted by date with the latest/highest version identified.",
@@ -904,6 +934,7 @@ AGENT_TOOL_MAP = {
         "github_get_file", "github_search_prs", "github_list_org_repos", "github_search_repos",
         "github_code_scanning_alerts", "github_dependabot_alerts",
         "github_create_branch", "github_create_or_update_file", "github_push_files", "github_create_pr",
+        "start_ghas_fix_pr", "get_ghas_fix_pr_status",
         "start_build_failure_analysis", "get_build_failure_analysis_status",
         "get_build_timeline", "get_build_log_content",
         "proget_search_packages",
