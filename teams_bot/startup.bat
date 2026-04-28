@@ -8,10 +8,14 @@ echo.
 REM Activate the Python virtual environment
 call C:\TFS_MCP\.venv\Scripts\activate.bat
 
-REM Set a fixed API key (change this to your own secret)
+REM Require AGENTONE_API_KEY to be supplied via the user environment.
+REM Set it once with:
+REM   [System.Environment]::SetEnvironmentVariable("AGENTONE_API_KEY","<your-secret>","User")
+REM Never hardcode the value here -- this file is committed to a public repo.
 if not defined AGENTONE_API_KEY (
-    set AGENTONE_API_KEY=agentone-hyland-2026
-    echo WARNING: Using default API key. Set AGENTONE_API_KEY env var for production.
+    echo ERROR: AGENTONE_API_KEY environment variable is not set.
+    echo Set it as a User env var, then restart this shell.
+    exit /b 1
 )
 
 REM Check if openai is installed
