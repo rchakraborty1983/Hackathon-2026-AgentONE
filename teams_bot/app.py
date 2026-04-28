@@ -55,7 +55,8 @@ MAX_HISTORY = 20
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"AgentONE starting on {API_HOST}:{API_PORT}")
-    logger.info(f"API Key: {API_KEY[:8]}...")
+    # Do NOT log any portion of API_KEY -- even a prefix is sensitive data.
+    logger.info(f"API Key configured: {bool(API_KEY)}")
     logger.info(f"Tools registered: {len(TOOL_DEFINITIONS)}")
     # Warm BuildDirector cache in AgentONE's process (background, non-blocking).
     # AgentONE imports TFSMCP functions directly, so it has its own _BD_CACHE.
@@ -111,10 +112,9 @@ async def log_requests(request: Request, call_next):
     method = request.method
     path = request.url.path
     client = request.client.host if request.client else "unknown"
-    # Log key headers (mask API key)
-    api_key_header = request.headers.get("x-api-key", "")
-    masked_key = f"{api_key_header[:8]}..." if len(api_key_header) > 8 else api_key_header
-    logger.info(f"→ {method} {path} from {client} | API-Key: {masked_key}")
+    # Do NOT log any portion of the inbound API key -- only whether one was supplied.
+    api_key_supplied = bool(request.headers.get("x-api-key", ""))
+    logger.info(f"→ {method} {path} from {client} | API-Key supplied: {api_key_supplied}")
 
     response = await call_next(request)
 
@@ -1619,14 +1619,20 @@ _REPORT_DIRS = [
 # Token = HMAC-SHA256(API_KEY, filename)[:16] — valid as long as the API key stays the same.
 # Not time-limited (reports are internal dev artifacts, not public), but unguessable without the key.
 
+import hmac as _hmac
+
 def _generate_report_token(filename: str) -> str:
-    """Generate an HMAC token for a report filename."""
-    return hashlib.sha256(f"{API_KEY}:{filename}".encode()).hexdigest()[:16]
+    """Generate an HMAC-SHA256 token for a report filename."""
+    return _hmac.new(
+        API_KEY.encode("utf-8"),
+        filename.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()[:16]
 
 def _verify_report_token(filename: str, token: str) -> bool:
-    """Verify an HMAC token for a report filename."""
+    """Verify an HMAC token for a report filename using a constant-time compare."""
     expected = _generate_report_token(filename)
-    return token == expected
+    return _hmac.compare_digest(token, expected)
 
 def get_report_url(report_path: str) -> str:
     """Build a public report URL with an auth token baked in."""
