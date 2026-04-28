@@ -113,8 +113,8 @@ async def log_requests(request: Request, call_next):
     path = request.url.path
     client = request.client.host if request.client else "unknown"
     # Do NOT log any portion of the inbound API key -- only whether one was supplied.
-    api_key_supplied = bool(request.headers.get("x-api-key", ""))
-    logger.info(f"→ {method} {path} from {client} | API-Key supplied: {api_key_supplied}")
+    auth_header_present = bool(request.headers.get("x-api-key", ""))
+    logger.info(f"→ {method} {path} from {client} | auth header present: {auth_header_present}")
 
     response = await call_next(request)
 
