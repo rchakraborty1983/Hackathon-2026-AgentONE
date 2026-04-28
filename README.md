@@ -80,7 +80,7 @@ Use Agent ONE directly in VS Code via GitHub Copilot agents and MCP tools — no
 
 Quick summary:
 ```powershell
-git clone https://github.com/rchakraborty1983/Hackathon-2026-AgentONE.git C:\TFS_MCP
+git clone https://github.com/HylandSandbox/Hackathon-2026-AgentONE.git C:\TFS_MCP
 cd C:\TFS_MCP
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1

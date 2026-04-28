@@ -542,8 +542,20 @@ Use descriptive names that include context:
 **DO NOT use these locations:**
 - ❌ C:\temp\
 - ❌ C:\Users\{user}\AppData\Local\Temp\
+- ❌ **C:\OnBase\Codebase\\** or any subfolder of the OnBase source checkout (this is a TFS-controlled workspace — never drop ad-hoc analysis scripts into source trees)
+- ❌ **C:\Users\{user}\AppData\Roaming\Code\User\prompts\agents\Markdown_Analysis\\** for `.py`, `.ps1`, `.bat`, `.cmd`, or `.sh` script files (Markdown_Analysis is for generated markdown/HTML/JSON reports only — scripts go to `C:\TFS_MCP\scripts\`)
 - ❌ Current working directory (unless explicitly requested)
 - ❌ Desktop or Downloads folder
+
+**Script vs Report — Where Each Goes:**
+
+| Artifact | Destination |
+|---|---|
+| Python / PowerShell / Bash scripts (`.py`, `.ps1`, `.sh`, `.bat`) | `C:\TFS_MCP\scripts\` (or `C:\TFS_MCP\` root for one-off backend scripts) |
+| Archived / historical scripts | `C:\TFS_MCP\scripts\archive\` |
+| Markdown reports (`.md`) | `C:\Users\{user}\AppData\Roaming\Code\User\prompts\agents\Markdown_Analysis\` |
+| HTML code-review reports | `C:\Users\{user}\AppData\Roaming\Code\User\prompts\agents\Markdown_Analysis\code-reviews\` |
+| Raw analysis data (`.json`, `.txt`, extracted `.cs` snapshots) | `C:\TFS_MCP\` |
 
 **Exception:**
 If the user explicitly requests a different output location, honor that request and document it.

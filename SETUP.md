@@ -39,7 +39,7 @@ After setup, you'll have these capabilities inside VS Code (via Copilot Chat):
 ## Step 1: Clone the Repository
 
 ```powershell
-git clone https://github.com/rchakraborty1983/Hackathon-2026-AgentONE.git C:\TFS_MCP
+git clone https://github.com/HylandSandbox/Hackathon-2026-AgentONE.git C:\TFS_MCP
 cd C:\TFS_MCP
 ```
 
