@@ -1,7 +1,7 @@
 ---
 name: TFS_Jira_Analyzer
-description: "Analyzes Jira cards and their linked TFS changesets to summarize code changes and suggest test scenarios. Use when: analyzing a Jira ticket, reviewing TFS changesets, generating test cases, understanding code diffs for a Jira key, test gap analysis."
-argument-hint: "A Jira key like CSFMD-10783 or SBPWC-11551 to analyze"
+description: "Analyzes Jira cards and their linked TFS changesets to summarize code changes and suggest test scenarios. Use when: analyzing a Jira ticket, reviewing TFS changesets, generating test cases, understanding code diffs for a Jira key, test gap analysis, one-off build card dependencies, cherry-pick cards for one-off build, prepare one-off 1000 build."
+argument-hint: "A Jira key like CSFMD-10783 or SBPWC-11551 to analyze, or 'one-off build 24.1 with SBPWC-12711, SBPOF-9653'"
 tools: [vscode/extensions, vscode/getProjectSetupInfo, vscode/installExtension, vscode/memory, vscode/newWorkspace, vscode/runCommand, vscode/vscodeAPI, vscode/askQuestions, execute/runNotebookCell, execute/testFailure, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, execute/runTests, read/getNotebookSummary, read/problems, read/readFile, read/viewImage, read/terminalSelection, read/terminalLastCommand, agent/runSubagent, edit/createDirectory, edit/createFile, edit/createJupyterNotebook, edit/editFiles, edit/editNotebook, edit/rename, search/changes, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, web/fetch, web/githubRepo, mcp-atlassian/addCommentToJiraIssue, mcp-atlassian/addWorklogToJiraIssue, mcp-atlassian/atlassianUserInfo, mcp-atlassian/createConfluenceFooterComment, mcp-atlassian/createConfluenceInlineComment, mcp-atlassian/createConfluencePage, mcp-atlassian/createIssueLink, mcp-atlassian/createJiraIssue, mcp-atlassian/editJiraIssue, mcp-atlassian/fetchAtlassian, mcp-atlassian/getAccessibleAtlassianResources, mcp-atlassian/getConfluenceCommentChildren, mcp-atlassian/getConfluencePage, mcp-atlassian/getConfluencePageDescendants, mcp-atlassian/getConfluencePageFooterComments, mcp-atlassian/getConfluencePageInlineComments, mcp-atlassian/getConfluenceSpaces, mcp-atlassian/getIssueLinkTypes, mcp-atlassian/getJiraIssue, mcp-atlassian/getJiraIssueRemoteIssueLinks, mcp-atlassian/getJiraIssueTypeMetaWithFields, mcp-atlassian/getJiraProjectIssueTypesMetadata, mcp-atlassian/getPagesInConfluenceSpace, mcp-atlassian/getTransitionsForJiraIssue, mcp-atlassian/getVisibleJiraProjects, mcp-atlassian/lookupJiraAccountId, mcp-atlassian/searchAtlassian, mcp-atlassian/searchConfluenceUsingCql, mcp-atlassian/searchJiraIssuesUsingJql, mcp-atlassian/transitionJiraIssue, mcp-atlassian/updateConfluencePage, browser/openBrowserPage, browser/readPage, browser/screenshotPage, browser/navigatePage, browser/clickElement, browser/dragElement, browser/hoverElement, browser/typeInPage, browser/runPlaywrightCode, browser/handleDialog, pylance-mcp-server/pylanceDocString, pylance-mcp-server/pylanceDocuments, pylance-mcp-server/pylanceFileSyntaxErrors, pylance-mcp-server/pylanceImports, pylance-mcp-server/pylanceInstalledTopLevelModules, pylance-mcp-server/pylanceInvokeRefactoring, pylance-mcp-server/pylancePythonEnvironments, pylance-mcp-server/pylanceRunCodeSnippet, pylance-mcp-server/pylanceSettings, pylance-mcp-server/pylanceSyntaxErrors, pylance-mcp-server/pylanceUpdatePythonEnvironment, pylance-mcp-server/pylanceWorkspaceRoots, pylance-mcp-server/pylanceWorkspaceUserFiles, github/add_issue_comment, github/create_branch, github/create_issue, github/create_or_update_file, github/create_pull_request, github/create_pull_request_review, github/create_repository, github/fork_repository, github/get_file_contents, github/get_issue, github/get_pull_request, github/get_pull_request_comments, github/get_pull_request_files, github/get_pull_request_reviews, github/get_pull_request_status, github/list_commits, github/list_issues, github/list_pull_requests, github/merge_pull_request, github/push_files, github/search_code, github/search_issues, github/search_repositories, github/search_users, github/update_issue, github/update_pull_request_branch, vscode.mermaid-chat-features/renderMermaidDiagram, ms-azuretools.vscode-containers/containerToolsConfig, ms-python.python/getPythonEnvironmentInfo, ms-python.python/getPythonExecutableCommand, ms-python.python/installPythonPackage, ms-python.python/configurePythonEnvironment, vscjava.vscode-java-debug/debugJavaApplication, vscjava.vscode-java-debug/setJavaBreakpoint, vscjava.vscode-java-debug/debugStepOperation, vscjava.vscode-java-debug/getDebugVariables, vscjava.vscode-java-debug/getDebugStackTrace, vscjava.vscode-java-debug/evaluateDebugExpression, vscjava.vscode-java-debug/getDebugThreads, vscjava.vscode-java-debug/removeJavaBreakpoints, vscjava.vscode-java-debug/stopDebugSession, vscjava.vscode-java-debug/getDebugSessionInfo, todo]
 ---
 
@@ -751,6 +751,36 @@ Treat Confluence as **authoritative internal engineering context** — design ra
 **Build version format**: `{major}.{minor}.{servicePack}.{buildNumber}` (e.g., `25.2.12.1000`)
 
 **Always include BuildDirector URL** in responses: `http://qa-websrvr/BuildDirector/Builds/BuildInfo/OnBase/{Version}/`
+
+---
+
+## ONEOFF_BUILD_SKILL — One-Off Build Card Dependency Resolution
+
+> **MANDATORY**: When the user asks about preparing a one-off build, cherry-picking cards for a 1000 build, or determining which cards are needed for a one-off, consult the comprehensive ONEOFF_BUILD_SKILL at:
+> **`C:\TFS_MCP\teams_bot\agents\ONEOFF_BUILD_SKILL.md`**
+
+### Quick Reference — One-Off Build Workflow
+
+| User Question | Action | Key Detail |
+|---|---|---|
+| "What cards do I need for a one-off 24.1 build?" | Run ONEOFF_BUILD_SKILL workflow | Detects file-level dependencies between cards |
+| "Prepare one-off build with SBPWC-12711, SBPOF-9653" | Run ONEOFF_BUILD_SKILL workflow | Finds all cards sharing files with primary cards |
+| "Cherry pick cards for 25.1 one-off" | Run ONEOFF_BUILD_SKILL workflow | Recursive dependency resolution |
+
+**Key concepts:**
+- **One-off build**: A build with `build_number=1000` that cherry-picks specific cards (not a BOTW)
+- **Build range**: From first service build after last BOTW → last service build before the one-off
+- **File overlap**: If Card A and Card B both modify the same file, both MUST be included
+- **Recursive dependencies**: If adding Card B introduces overlap with Card C, Card C must also be included
+
+**Workflow summary:**
+1. Find last BOTW for the version (`bd_get_botw_builds`)
+2. Determine build range (all service builds after BOTW up to latest)
+3. Get all cards in the range (JQL on "Fixed In Build")
+4. Get files modified by primary cards (TFS changeset diffs)
+5. Find other cards whose changesets touch the same files
+6. Recursively expand until no new dependencies found
+7. Report final card set with conflict details
 
 ---
 
